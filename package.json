@@ -1,0 +1,47 @@
+{
+  "name": "plotsapi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "imports": {
+    "#*": "./src/*"
+  },
+  "scripts": {
+    "dev": "tsx --watch src/app.ts",
+    "start": "node dist/app.js",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thorskii92/PLOTSAPI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/thorskii92/PLOTSAPI/issues"
+  },
+  "homepage": "https://github.com/thorskii92/PLOTSAPI#readme",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@tsconfig/node22": "^22.0.5",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.2.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-perfectionist": "^5.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0"
+  }
+}
