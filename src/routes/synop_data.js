@@ -37,8 +37,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const body = req.body;
 
-    if (!body.stnID || !body.sDate || !body.sHour) {
-        return res.status(400).json({ error: 'stnID, sDate, and sHour are required' });
+    if (!body.stnId || !body.sDate || !body.sHour) {
+        return res.status(400).json({ error: 'stnId, sDate, and sHour are required' });
     }
 
     const columns = [];
@@ -65,12 +65,13 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /synop_data
-// Full update: requires stnID, sDate, sHour as identifier
+// Full update: requires stnId, sDate, sHour as identifier
 router.put('/', async (req, res) => {
-    const { stnID, sDate, sHour, ...rest } = req.body;
+    console.log(req.body)
+    const { stnId, sDate, sHour, ...rest } = req.body;
 
-    if (!stnID || !sDate || !sHour) {
-        return res.status(400).json({ error: 'stnID, sDate, and sHour are required to update' });
+    if (!stnId || !sDate || !sHour) {
+        return res.status(400).json({ error: 'stnId, sDate, and sHour are required to update' });
     }
 
     const updates = [];
@@ -88,9 +89,9 @@ router.put('/', async (req, res) => {
     const sql = `
         UPDATE synop_data
         SET ${updates.join(', ')}
-        WHERE stnID = ? AND sDate = ? AND sHour = ?
+        WHERE stnId = ? AND sDate = ? AND sHour = ?
     `;
-    values.push(stnID, sDate, sHour);
+    values.push(stnId, sDate, sHour);
 
     try {
         const [result] = await dbPool.promise().query(sql, values);
@@ -105,12 +106,12 @@ router.put('/', async (req, res) => {
 });
 
 // PATCH /synop_data
-// Partial update: requires stnID, sDate, sHour to identify, updates only provided fields
+// Partial update: requires stnId, sDate, sHour to identify, updates only provided fields
 router.patch('/', async (req, res) => {
-    const { stnID, sDate, sHour, ...rest } = req.body;
+    const { stnId, sDate, sHour, ...rest } = req.body;
 
-    if (!stnID || !sDate || !sHour) {
-        return res.status(400).json({ error: 'stnID, sDate, and sHour are required to patch' });
+    if (!stnId || !sDate || !sHour) {
+        return res.status(400).json({ error: 'stnId, sDate, and sHour are required to patch' });
     }
 
     const updates = [];
@@ -128,9 +129,9 @@ router.patch('/', async (req, res) => {
     const sql = `
         UPDATE synop_data
         SET ${updates.join(', ')}
-        WHERE stnID = ? AND sDate = ? AND sHour = ?
+        WHERE stnId = ? AND sDate = ? AND sHour = ?
     `;
-    values.push(stnID, sDate, sHour);
+    values.push(stnId, sDate, sHour);
 
     try {
         const [result] = await dbPool.promise().query(sql, values);
@@ -145,16 +146,16 @@ router.patch('/', async (req, res) => {
 });
 
 // DELETE /synop_data
-// Requires stnID, sDate, sHour to identify
+// Requires stnId, sDate, sHour to identify
 router.delete('/', async (req, res) => {
-    const { stnID, sDate, sHour } = req.body;
+    const { stnId, sDate, sHour } = req.body;
 
-    if (!stnID || !sDate || !sHour) {
-        return res.status(400).json({ error: 'stnID, sDate, and sHour are required to delete' });
+    if (!stnId || !sDate || !sHour) {
+        return res.status(400).json({ error: 'stnId, sDate, and sHour are required to delete' });
     }
 
-    const sql = 'DELETE FROM synop_data WHERE stnID = ? AND sDate = ? AND sHour = ?';
-    const values = [stnID, sDate, sHour];
+    const sql = 'DELETE FROM synop_data WHERE stnId = ? AND sDate = ? AND sHour = ?';
+    const values = [stnId, sDate, sHour];
 
     try {
         const [result] = await dbPool.promise().query(sql, values);

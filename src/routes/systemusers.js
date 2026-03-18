@@ -164,5 +164,80 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+router.post('/login', async (req, res) => {
+    try {
+        let { username, password } = req.body;
+
+        const [users] = await dbPool.promise().query(
+            "SELECT * FROM systemusers WHERE sUser = ?",
+            [username]
+        );
+
+        if (users.length === 0) {
+            return res.status(401).json({ error: "Invalid credentials" });
+        }
+
+        const user = users[0];
+
+        // ✅ compare hashed password
+        const isMatch = await bcrypt.compare(password, user.sPass);
+
+        if (!isMatch) {
+            return res.status(401).json({ error: "Invalid credentials" });
+        }
+
+        // ✅ generate token
+        const token = jwt.sign(
+            { id: user.Id, username: user.sUser, userType: user.userType },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' } // ✅ 1 week
+        );
+
+        res.status(200).json({
+            message: "Login successful",
+            user: {
+                id: user.Id,
+                username: user.sUser,
+                fullName: user.fullName,
+                userType: user.userType,
+            },
+            auth_token: token
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Login error" });
+    }
+});
+
+router.post('/logout', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader) {
+            return res.status(400).json({ error: "Token required" });
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        // Decode without verifying expiration (we just need expiry time)
+        const decoded = jwt.decode(token);
+
+        if (!decoded) {
+            return res.status(400).json({ error: "Invalid token" });
+        }
+
+        await dbPool.promise().query(
+            "INSERT INTO token_blacklist (token, expiresAt) VALUES (?, ?)",
+            [token, new Date(decoded.exp * 1000)]
+        );
+
+        res.status(200).json({ message: "Logged out successfully" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Logout error" }  );
+    }
+});
 
 module.exports = router;
