@@ -6,17 +6,37 @@ const { dbPool } = require('../connect');
 // =====================================================
 // GET ALL (with filters + pagination)
 // =====================================================
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
 
     const {
         stnID,
         MorS,
-        sDate,
-        limit = 100
+        sDate
     } = req.query;
 
-    let sql = `
-        SELECT a.*, s.stnName, u.username
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Sorting (whitelist for safety)
+    const allowedSortFields = [
+        'sDate',
+        'sHour',
+        'stnID',
+        'metID'
+    ];
+
+    const sortBy = allowedSortFields.includes(req.query.sortBy)
+        ? req.query.sortBy
+        : 'sDate';
+
+    const sortOrder =
+        (req.query.sortOrder || 'desc').toLowerCase() === 'asc'
+            ? 'ASC'
+            : 'DESC';
+
+    let baseSql = `
         FROM aerodrome a
         LEFT JOIN stations s ON a.stnID = s.Id
         LEFT JOIN users u ON a.uID = u.Id
@@ -24,37 +44,73 @@ router.get('/', (req, res) => {
     `;
 
     const values = [];
+    const conditions = [];
 
+    // Filters
     if (stnID) {
-        sql += " AND a.stnID = ?";
+        conditions.push("a.stnID = ?");
         values.push(stnID);
     }
 
     if (MorS) {
-        sql += " AND a.MorS = ?";
+        conditions.push("a.MorS = ?");
         values.push(MorS);
     }
 
     if (sDate) {
-        sql += " AND a.sDate = ?";
+        conditions.push("a.sDate = ?");
         values.push(sDate);
     }
 
-    sql += " ORDER BY a.sDate DESC, a.sHour DESC LIMIT ?";
-    values.push(parseInt(limit));
+    if (conditions.length > 0) {
+        baseSql += " AND " + conditions.join(" AND ");
+    }
 
-    dbPool.query(sql, values, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
+    try {
+
+        // 1️⃣ Get total count
+        const [countResult] = await dbPool.promise().query(
+            `SELECT COUNT(*) as total ${baseSql}`,
+            values
+        );
+
+        const total = countResult[0].total;
+        const totalPages = Math.ceil(total / limit);
+
+        // 2️⃣ Get paginated + sorted data
+        const [results] = await dbPool.promise().query(
+            `SELECT a.*, s.stnName, u.username
+             ${baseSql}
+             ORDER BY a.${sortBy} ${sortOrder}
+             LIMIT ? OFFSET ?`,
+            [...values, limit, offset]
+        );
 
         res.status(200).json({
             message: "Successfully retrieved aerodrome records",
+            pagination: {
+                total,
+                totalPages,
+                currentPage: page,
+                limit
+            },
+            filters: {
+                stnID: stnID || null,
+                MorS: MorS || null,
+                sDate: sDate || null
+            },
+            sorting: {
+                sortBy,
+                sortOrder
+            },
             results
         });
-    });
-});
 
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // =====================================================
 // GET BY ID

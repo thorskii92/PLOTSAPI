@@ -2,17 +2,37 @@ const express = require('express');
 const router = express.Router();
 const { dbPool } = require('../connect');
 
-// GET /synop_data?date=YYYY-MM-DD&sHour=HHMM
-router.get('/', async (req, res) => {
-    const { sDate, sHour } = req.query;
+// GET /synop_data
+// Example:
+// /synop_data?sDate=2026-03-18&stnId=1&page=1&limit=10&sortBy=sDate&sortOrder=desc
 
-    let sql = 'SELECT * FROM synop_data';
+router.get('/', async (req, res) => {
+    const { sDate, sHour, stnId } = req.query;
+
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 24;
+    const offset = (page - 1) * limit;
+
+    // Sorting (whitelist for security)
+    const allowedSortFields = ['sDate', 'sHour', 'stnId'];
+    const sortBy = allowedSortFields.includes(req.query.sortBy)
+        ? req.query.sortBy
+        : 'sDate';
+
+    const sortOrder =
+        (req.query.sortOrder || 'desc').toLowerCase() === 'asc'
+            ? 'ASC'
+            : 'DESC';
+
+    let baseSql = 'FROM synop_data';
     const params = [];
     const conditions = [];
 
+    // Filters
     if (sDate) {
         conditions.push('sDate = ?');
-        params.push(sDate); // 'YYYY-MM-DD'
+        params.push(sDate);
     }
 
     if (sHour) {
@@ -20,13 +40,53 @@ router.get('/', async (req, res) => {
         params.push(sHour);
     }
 
+    if (stnId) {
+        conditions.push('stnId = ?');
+        params.push(stnId);
+    }
+
     if (conditions.length > 0) {
-        sql += ' WHERE ' + conditions.join(' AND ');
+        baseSql += ' WHERE ' + conditions.join(' AND ');
     }
 
     try {
-        const [results] = await dbPool.promise().query(sql, params);
-        res.status(200).json({ message: "Successfully retrieved synoptic data", results });
+        // Get total count (with filters)
+        const [countResult] = await dbPool.promise().query(
+            `SELECT COUNT(*) as total ${baseSql}`,
+            params
+        );
+
+        const total = countResult[0].total;
+        const totalPages = Math.ceil(total / limit);
+
+        // Get paginated + filtered + sorted data
+        const [results] = await dbPool.promise().query(
+            `SELECT * ${baseSql}
+             ORDER BY ${sortBy} ${sortOrder}
+             LIMIT ? OFFSET ?`,
+            [...params, limit, offset]
+        );
+
+        res.status(200).json({
+            message: "Successfully retrieved synoptic data",
+            pagination: {
+                total,
+                totalPages,
+                currentPage: page,
+                limit
+            },
+            filters: {
+                sDate: sDate || null,
+                sHour: sHour || null,
+                stnId: stnId || null
+            },
+            sorting: {
+                sortBy,
+                sortOrder
+            },
+            results
+        });
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Internal Server Error' });
