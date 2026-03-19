@@ -20,6 +20,7 @@ const sms_logs = require('./src/routes/sms_logs');
 const sms_recipients = require('./src/routes/sms_recipients');
 const aerodrome = require('./src/routes/aerodrome');
 const category = require('./src/routes/category');
+const health = require('./src/routes/health');
 
 app.get('/', (req, res) => {
     res.send('PLOTS!');
@@ -39,3 +40,4 @@ app.use("/api/codeparameter", codeparameter);
 app.use("/api/sms-recipients", sms_recipients);
 app.use("/api/sms-logs", sms_logs);
 app.use("/api/aerodrome", aerodrome);
+app.use("/api/health", health);
