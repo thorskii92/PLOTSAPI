@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { dbPool } = require('../connect');
 const { encrypt, decrypt } = require('../utils/crypto')
+const jwt = require('jsonwebtoken');
 
 router.get('/testAuth', (req, res) => {
     const encrypted = encrypt("uzzi")
@@ -166,11 +167,15 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/login', async (req, res) => {
     try {
-        let { username, password } = req.body;
+        let { username, password } = req.body
 
+        // Encrypt username to match DB
+        const encryptedUsername = encrypt(username)
+
+        // Query the user
         const [users] = await dbPool.promise().query(
             "SELECT * FROM systemusers WHERE sUser = ?",
-            [username]
+            [encryptedUsername]
         );
 
         if (users.length === 0) {
@@ -179,33 +184,44 @@ router.post('/login', async (req, res) => {
 
         const user = users[0];
 
-        // ✅ compare hashed password
-        const isMatch = await bcrypt.compare(password, user.sPass);
+        // Decrypt password stored in DB
+        const decryptedPassword = decrypt(user.sPass)
 
-        if (!isMatch) {
+        // Compare passwords
+        if (password !== decryptedPassword) {
             return res.status(401).json({ error: "Invalid credentials" });
         }
 
-        // ✅ generate token
+        // ✅ Generate JWT token
         const token = jwt.sign(
             { id: user.Id, username: user.sUser, userType: user.userType },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' } // ✅ 1 week
-        );
+            { expiresIn: '7d' }
+        )
 
+        // Decrypt username for storing / frontend use
+        const decryptedUsername = decrypt(user.sUser);
+
+        // Prepare full user data (like setCurrentUser)
+        const userData = {
+            username: decryptedUsername,
+            fullName: user.fullName ?? null,
+            userType: user.userType ?? 'USER',
+            status: user.status ?? 'ACTIVE',
+            station_id: user.default_station_id ?? null,
+            auth_token: token,
+            createdAt: user.createdAt ?? new Date().toISOString(),
+            updatedAt: user.updatedAt ?? new Date().toISOString()
+        };
+
+        // Respond with full user info
         res.status(200).json({
             message: "Login successful",
-            user: {
-                id: user.Id,
-                username: user.sUser,
-                fullName: user.fullName,
-                userType: user.userType,
-            },
-            auth_token: token
+            user: userData
         });
 
     } catch (err) {
-        console.error(err);
+        console.error("Login error:", err);
         res.status(500).json({ error: "Login error" });
     }
 });
@@ -236,7 +252,7 @@ router.post('/logout', async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Logout error" }  );
+        res.status(500).json({ error: "Logout error" });
     }
 });
 
