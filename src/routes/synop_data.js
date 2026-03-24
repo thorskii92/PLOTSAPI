@@ -2,22 +2,15 @@ const express = require('express');
 const router = express.Router();
 const { dbPool } = require('../connect');
 const { formatDate } = require('../utils/formatter');
-
-// GET /synop_data
-// Examples:
-// /synop_data
-// /synop_data?startDate=2026-02-01&endDate=2026-02-28
-// /synop_data?sDate=2026-03-18
-
 router.get('/', async (req, res) => {
     const { sDate, sHour, stnId, startDate, endDate } = req.query;
 
     // Pagination
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 24;
-    const offset = (page - 1) * limit;
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 24;
+    let offset = (page - 1) * limit;
 
-    // Sorting (whitelist for security)
+    // Sorting
     const allowedSortFields = ['sDate', 'sHour', 'stnId'];
     const sortBy = allowedSortFields.includes(req.query.sortBy)
         ? req.query.sortBy
@@ -38,7 +31,7 @@ router.get('/', async (req, res) => {
     let start = startDate;
     let end = endDate;
 
-    // Default to last 1 month if no date filters provided
+    // Default last 1 month
     if (!start && !end && !sDate) {
         const now = new Date();
         const oneMonthAgo = new Date();
@@ -48,10 +41,7 @@ router.get('/', async (req, res) => {
         end = now.toISOString().split('T')[0];
     }
 
-    console.log("start:", start)
-    console.log("end:", end)
-
-    // Exact date (priority)
+    // Exact date
     if (sDate) {
         conditions.push('sDate = ?');
         params.push(sDate);
@@ -60,14 +50,12 @@ router.get('/', async (req, res) => {
             conditions.push('sDate >= ?');
             params.push(start);
         }
-
         if (end) {
             conditions.push('sDate <= ?');
             params.push(end);
         }
     }
 
-    // Other filters
     if (sHour) {
         conditions.push('sHour = ?');
         params.push(sHour);
@@ -83,7 +71,44 @@ router.get('/', async (req, res) => {
     }
 
     try {
-        // Total count
+        // =========================
+        // If date range → return ALL (no pagination)
+        // =========================
+        if (startDate && endDate) {
+            const [results] = await dbPool.promise().query(
+                `SELECT * ${baseSql}
+                 ORDER BY ${sortBy} ${sortOrder}`,
+                params
+            );
+
+            const formattedResults = results.map(row => {
+                const newRow = { ...row };
+                Object.keys(newRow).forEach(key => {
+                    if (newRow[key] instanceof Date) {
+                        newRow[key] = formatDate(newRow[key]);
+                    }
+                });
+                return newRow;
+            });
+
+            return res.status(200).json({
+                message: "Successfully retrieved synoptic data (date range)",
+                pagination: null,
+                filters: {
+                    startDate: start || null,
+                    endDate: end || null
+                },
+                sorting: {
+                    sortBy,
+                    sortOrder
+                },
+                results: formattedResults
+            });
+        }
+
+        // =========================
+        // Normal paginated query
+        // =========================
         const [countResult] = await dbPool.promise().query(
             `SELECT COUNT(*) as total ${baseSql}`,
             params
@@ -92,7 +117,6 @@ router.get('/', async (req, res) => {
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
-        // Data query
         const [results] = await dbPool.promise().query(
             `SELECT * ${baseSql}
              ORDER BY ${sortBy} ${sortOrder}
@@ -102,13 +126,11 @@ router.get('/', async (req, res) => {
 
         const formattedResults = results.map(row => {
             const newRow = { ...row };
-
             Object.keys(newRow).forEach(key => {
                 if (newRow[key] instanceof Date) {
                     newRow[key] = formatDate(newRow[key]);
                 }
             });
-
             return newRow;
         });
 
