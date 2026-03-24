@@ -28,14 +28,14 @@ router.get('/', async (req, res) => {
             : 'DESC';
 
     let baseSql = 'FROM synop_data';
-    const params: any[] = [];
-    const conditions: string[] = [];
+    const params = [];
+    const conditions = [];
 
     // =========================
     // DATE FILTER LOGIC
     // =========================
-    let start = startDate as string | undefined;
-    let end = endDate as string | undefined;
+    let start = startDate;
+    let end = endDate;
 
     // Default to last 1 month if no date filters provided
     if (!start && !end && !sDate) {
