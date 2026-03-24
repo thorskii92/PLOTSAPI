@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { dbPool } = require('../connect');
+const { formatDate } = require('../utils/formatter');
 
 // GET /synop_data
 // Examples:
@@ -46,6 +47,9 @@ router.get('/', async (req, res) => {
         start = oneMonthAgo.toISOString().split('T')[0];
         end = now.toISOString().split('T')[0];
     }
+
+    console.log("start:", start)
+    console.log("end:", end)
 
     // Exact date (priority)
     if (sDate) {
@@ -96,6 +100,18 @@ router.get('/', async (req, res) => {
             [...params, limit, offset]
         );
 
+        const formattedResults = results.map(row => {
+            const newRow = { ...row };
+
+            Object.keys(newRow).forEach(key => {
+                if (newRow[key] instanceof Date) {
+                    newRow[key] = formatDate(newRow[key]);
+                }
+            });
+
+            return newRow;
+        });
+
         res.status(200).json({
             message: "Successfully retrieved synoptic data",
             pagination: {
@@ -115,7 +131,7 @@ router.get('/', async (req, res) => {
                 sortBy,
                 sortOrder
             },
-            results
+            results: formattedResults
         });
 
     } catch (err) {
