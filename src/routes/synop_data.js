@@ -3,11 +3,13 @@ const router = express.Router();
 const { dbPool } = require('../connect');
 
 // GET /synop_data
-// Example:
-// /synop_data?sDate=2026-03-18&stnId=1&page=1&limit=10&sortBy=sDate&sortOrder=desc
+// Examples:
+// /synop_data
+// /synop_data?startDate=2026-02-01&endDate=2026-02-28
+// /synop_data?sDate=2026-03-18
 
 router.get('/', async (req, res) => {
-    const { sDate, sHour, stnId } = req.query;
+    const { sDate, sHour, stnId, startDate, endDate } = req.query;
 
     // Pagination
     const page = parseInt(req.query.page) || 1;
@@ -26,15 +28,42 @@ router.get('/', async (req, res) => {
             : 'DESC';
 
     let baseSql = 'FROM synop_data';
-    const params = [];
-    const conditions = [];
+    const params: any[] = [];
+    const conditions: string[] = [];
 
-    // Filters
+    // =========================
+    // DATE FILTER LOGIC
+    // =========================
+    let start = startDate as string | undefined;
+    let end = endDate as string | undefined;
+
+    // Default to last 1 month if no date filters provided
+    if (!start && !end && !sDate) {
+        const now = new Date();
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(now.getMonth() - 1);
+
+        start = oneMonthAgo.toISOString().split('T')[0];
+        end = now.toISOString().split('T')[0];
+    }
+
+    // Exact date (priority)
     if (sDate) {
         conditions.push('sDate = ?');
         params.push(sDate);
+    } else {
+        if (start) {
+            conditions.push('sDate >= ?');
+            params.push(start);
+        }
+
+        if (end) {
+            conditions.push('sDate <= ?');
+            params.push(end);
+        }
     }
 
+    // Other filters
     if (sHour) {
         conditions.push('sHour = ?');
         params.push(sHour);
@@ -50,7 +79,7 @@ router.get('/', async (req, res) => {
     }
 
     try {
-        // Get total count (with filters)
+        // Total count
         const [countResult] = await dbPool.promise().query(
             `SELECT COUNT(*) as total ${baseSql}`,
             params
@@ -59,7 +88,7 @@ router.get('/', async (req, res) => {
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
-        // Get paginated + filtered + sorted data
+        // Data query
         const [results] = await dbPool.promise().query(
             `SELECT * ${baseSql}
              ORDER BY ${sortBy} ${sortOrder}
@@ -77,6 +106,8 @@ router.get('/', async (req, res) => {
             },
             filters: {
                 sDate: sDate || null,
+                startDate: start || null,
+                endDate: end || null,
                 sHour: sHour || null,
                 stnId: stnId || null
             },
