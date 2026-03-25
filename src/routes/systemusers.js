@@ -84,6 +84,9 @@ router.put('/:id', async (req, res) => {
     const values = [];
 
     Object.entries(body).forEach(([key, value]) => {
+        if (key === "sPass" || key === "sUser") {
+            value = encrypt(value); // ✅ FIX
+        }
         updates.push(`${key} = ?`);
         values.push(value);
     });
@@ -120,6 +123,9 @@ router.patch('/:id', async (req, res) => {
     const values = [];
 
     Object.entries(body).forEach(([key, value]) => {
+        if (key === "sPass" || key === "sUser") {
+            value = encrypt(value); // ✅ FIX
+        }
         updates.push(`${key} = ?`);
         values.push(value);
     });
@@ -167,10 +173,10 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/login', async (req, res) => {
     try {
-        let { username, password } = req.body
+        let { username, password } = req.body;
 
         // Encrypt username to match DB
-        const encryptedUsername = encrypt(username)
+        const encryptedUsername = encrypt(username);
 
         // Query the user
         const [users] = await dbPool.promise().query(
@@ -185,7 +191,7 @@ router.post('/login', async (req, res) => {
         const user = users[0];
 
         // Decrypt password stored in DB
-        const decryptedPassword = decrypt(user.sPass)
+        const decryptedPassword = decrypt(user.sPass);
 
         // Compare passwords
         if (password !== decryptedPassword) {
@@ -197,13 +203,14 @@ router.post('/login', async (req, res) => {
             { id: user.Id, username: user.sUser, userType: user.userType },
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
-        )
+        );
 
         // Decrypt username for storing / frontend use
         const decryptedUsername = decrypt(user.sUser);
 
-        // Prepare full user data (like setCurrentUser)
+        // Prepare full user data including backend ID
         const userData = {
+            id: user.Id,            // 🔹 Include backend ID
             username: decryptedUsername,
             fullName: user.fullName ?? null,
             userType: user.userType ?? 'USER',
