@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { dbPool } = require('../connect');
 const { formatDate } = require('../utils/formatter');
+
 router.get('/', async (req, res) => {
     const { sDate, sHour, stnId, startDate, endDate } = req.query;
 
@@ -170,23 +171,35 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'stnId, sDate, and sHour are required' });
     }
 
-    const columns = [];
-    const placeholders = [];
-    const values = [];
-
-    Object.entries(body).forEach(([key, value]) => {
-        if (value !== undefined) {
-            columns.push(key);
-            placeholders.push('?');
-            values.push(value);
-        }
-    });
-
-    const sql = `INSERT INTO synop_data (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+    if (!body.hasOwnProperty("isValidated")) {
+        body.isValidated = 0;
+    }
 
     try {
+        // ✅ Ensure column exists BEFORE insert
+        await ensureColumnExists('synop_data', 'isValidated', 'TINYINT(1) DEFAULT 0');
+
+        const columns = [];
+        const placeholders = [];
+        const values = [];
+
+        Object.entries(body).forEach(([key, value]) => {
+            if (value !== undefined) {
+                columns.push(key);
+                placeholders.push('?');
+                values.push(value);
+            }
+        });
+
+        const sql = `INSERT INTO synop_data (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+
         const [result] = await dbPool.promise().query(sql, values);
-        res.status(201).json({ message: 'Synop data created successfully', insertedId: result.insertId });
+
+        res.status(201).json({
+            message: 'Synop data created successfully',
+            insertedId: result.insertId
+        });
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
@@ -221,6 +234,8 @@ router.put('/', async (req, res) => {
         WHERE stnId = ? AND sDate = ? AND sHour = ?
     `;
     values.push(stnId, sDate, sHour);
+
+    await ensureColumnExists('synop_data', 'isValidated', 'TINYINT(1) DEFAULT 0');
 
     try {
         const [result] = await dbPool.promise().query(sql, values);
@@ -262,6 +277,8 @@ router.patch('/', async (req, res) => {
     `;
     values.push(stnId, sDate, sHour);
 
+    await ensureColumnExists('synop_data', 'isValidated', 'TINYINT(1) DEFAULT 0');
+
     try {
         const [result] = await dbPool.promise().query(sql, values);
         if (result.affectedRows === 0) {
@@ -299,3 +316,31 @@ router.delete('/', async (req, res) => {
 });
 
 module.exports = router;
+
+const ensureColumnExists = async (tableName, columnName, definition) => {
+    try {
+        const [rows] = await dbPool.promise().query(
+            `
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = ? 
+              AND COLUMN_NAME = ?
+              AND TABLE_SCHEMA = DATABASE()
+            `,
+            [tableName, columnName]
+        );
+
+        if (rows.length === 0) {
+            console.log(`Adding missing column: ${columnName}`);
+
+            await dbPool.promise().query(
+                `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`
+            );
+
+            console.log(`Column ${columnName} added successfully`);
+        }
+    } catch (err) {
+        console.error(`Error ensuring column ${columnName}:`, err);
+        throw err;
+    }
+};
