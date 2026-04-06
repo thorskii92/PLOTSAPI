@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
     let baseSql = `
         FROM aerodrome a
         LEFT JOIN stations s ON a.stnID = s.Id
-        LEFT JOIN users u ON a.uID = u.Id
+        LEFT JOIN systemusers u ON a.uID = u.Id
         WHERE 1=1
     `;
 
@@ -79,7 +79,7 @@ router.get('/', async (req, res) => {
 
         // 2️⃣ Get paginated + sorted data
         const [results] = await dbPool.promise().query(
-            `SELECT a.*, s.stnName, u.username
+            `SELECT a.*
              ${baseSql}
              ORDER BY a.${sortBy} ${sortOrder}
              LIMIT ? OFFSET ?`,
